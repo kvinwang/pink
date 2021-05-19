@@ -188,6 +188,7 @@ pub trait Ext: sealing::Sealed {
 		to: AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
+		allows_reentry: bool,
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)>;
 
 	/// Instantiate a contract from the given code.
@@ -475,6 +476,8 @@ pub struct Frame<T: Config> {
 	entry_point: ExportedFunction,
 	/// The gas meter capped to the supplied gas limit.
 	nested_meter: GasMeter<T>,
+	/// If `false` the contract enabled its defense against reentrance attacks.
+	allows_reentry: bool,
 }
 
 /// Parameter passed in when creating a new `Frame`.
@@ -746,6 +749,7 @@ where
 			entry_point,
 			nested_meter: gas_meter.nested(gas_limit)
 				.map_err(|e| (e.into(), executable.code_len()))?,
+			allows_reentry: true,
 		};
 
 		Ok((frame, executable))
@@ -1018,6 +1022,11 @@ where
 		self.frames().skip(1).any(|f| &f.account_id == account_id)
 	}
 
+	/// Returns whether the specified contract allows to be reentered right now.
+	fn allows_reentry(&self, id: &AccountIdOf<T>) -> bool {
+		!self.frames().any(|f| &f.account_id == id && !f.allows_reentry)
+	}
+
 	/// Increments the cached account id and returns the value to be used for the trie_id.
 	fn next_trie_seed(&mut self) -> u64 {
 		let next = if let Some(current) = self.account_counter {
@@ -1049,7 +1058,12 @@ where
 		to: T::AccountId,
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
+		allows_reentry: bool,
 	) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
+		if !self.allows_reentry(&to) {
+			return Err((<Error<T>>::ReentranceDenied.into(), 0));
+		}
+
 		// We ignore instantiate frames in our search for a cached contract.
 		// Otherwise it would be possible to recursively call a contract from its own
 		// constructor: We disallow calling not fully constructed contracts.
@@ -1062,12 +1076,21 @@ where
 					_ => None,
 				}
 			});
+
+		// Before pushing the new frame: Protect the caller contract against reentrancy attacks.
+		self.top_frame_mut().allows_reentry = allows_reentry;
+
 		let executable = self.push_frame(
 			FrameArgs::Call{dest: to, cached_info},
 			value,
 			gas_limit
 		)?;
-		self.run(executable, input_data)
+		let result = self.run(executable, input_data);
+
+		// Protection is on a per call basis.
+		self.top_frame_mut().allows_reentry = true;
+
+		result
 	}
 
 	fn instantiate(
@@ -1101,7 +1124,7 @@ where
 		beneficiary: &AccountIdOf<Self::T>,
 	) -> Result<u32, (DispatchError, u32)> {
 		if self.is_recursive() {
-			return Err((Error::<T>::ReentranceDenied.into(), 0));
+			return Err((Error::<T>::TerminatedWhileReentrant.into(), 0));
 		}
 		let frame = self.top_frame_mut();
 		let info = frame.terminate();
@@ -1129,7 +1152,7 @@ where
 		delta: Vec<StorageKey>,
 	) -> Result<(u32, u32), (DispatchError, u32, u32)> {
 		if self.is_recursive() {
-			return Err((Error::<T>::ReentranceDenied.into(), 0, 0));
+			return Err((Error::<T>::TerminatedWhileReentrant.into(), 0, 0));
 		}
 		let origin_contract = self.top_frame_mut().contract_info().clone();
 		let result = Rent::<T, E>::restore_to(
@@ -1254,6 +1277,8 @@ where
 			false
 		}
 	}
+
+
 }
 
 fn deposit_event<T: Config>(
@@ -1721,7 +1746,7 @@ mod tests {
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(0, BOB, 0, vec![]);
+			let r = ctx.ext.call(0, BOB, 0, vec![], true);
 
 			REACHED_BOTTOM.with(|reached_bottom| {
 				let mut reached_bottom = reached_bottom.borrow_mut();
@@ -1779,7 +1804,7 @@ mod tests {
 
 			// Call into CHARLIE contract.
 			assert_matches!(
-				ctx.ext.call(0, CHARLIE, 0, vec![]),
+				ctx.ext.call(0, CHARLIE, 0, vec![], true),
 				Ok(_)
 			);
 			exec_success()
@@ -1822,7 +1847,7 @@ mod tests {
 
 			// Call into charlie contract.
 			assert_matches!(
-				ctx.ext.call(0, CHARLIE, 0, vec![]),
+				ctx.ext.call(0, CHARLIE, 0, vec![], true),
 				Ok(_)
 			);
 			exec_success()
@@ -2211,7 +2236,7 @@ mod tests {
 				assert_ne!(original_allowance, changed_allowance);
 				ctx.ext.set_rent_allowance(changed_allowance);
 				assert_eq!(
-					ctx.ext.call(0, CHARLIE, 0, vec![]).map(|v| v.0).map_err(|e| e.0),
+					ctx.ext.call(0, CHARLIE, 0, vec![], true).map(|v| v.0).map_err(|e| e.0),
 					exec_trapped()
 				);
 				assert_eq!(ctx.ext.rent_allowance(), changed_allowance);
@@ -2220,7 +2245,7 @@ mod tests {
 			exec_success()
 		});
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			assert!(ctx.ext.call(0, BOB, 0, vec![99]).is_ok());
+			assert!(ctx.ext.call(0, BOB, 0, vec![99], true).is_ok());
 			exec_trapped()
 		});
 
@@ -2247,7 +2272,7 @@ mod tests {
 	fn recursive_call_during_constructor_fails() {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![]),
+				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![], true),
 				Err((ExecError{error, ..}, _)) if error == <Error<Test>>::NotCallable.into()
 			);
 			exec_success()

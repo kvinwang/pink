@@ -289,6 +289,7 @@ mod tests {
 		to: AccountIdOf<Test>,
 		value: u64,
 		data: Vec<u8>,
+		allows_reentry: bool,
 	}
 
 	pub struct MockExt {
@@ -333,11 +334,13 @@ mod tests {
 			to: AccountIdOf<Self::T>,
 			value: u64,
 			data: Vec<u8>,
+			allows_reentry: bool,
 		) -> Result<(ExecReturnValue, u32), (ExecError, u32)> {
 			self.transfers.push(TransferEntry {
 				to,
 				value,
-				data: data,
+				data,
+				allows_reentry,
 			});
 			Ok((ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }, 0))
 		}
@@ -374,6 +377,7 @@ mod tests {
 				to: to.clone(),
 				value,
 				data: Vec::new(),
+				allows_reentry: true,
 			});
 			Ok(())
 		}
@@ -523,6 +527,7 @@ mod tests {
 				to: ALICE,
 				value: 153,
 				data: Vec::new(),
+				allows_reentry: true,
 			}]
 		);
 	}
@@ -588,6 +593,7 @@ mod tests {
 				to: ALICE,
 				value: 6,
 				data: vec![1, 2, 3, 4],
+				allows_reentry: true,
 			}]
 		);
 	}
@@ -773,6 +779,7 @@ mod tests {
 				to: ALICE,
 				value: 6,
 				data: vec![1, 2, 3, 4],
+				allows_reentry: true,
 			}]
 		);
 	}
