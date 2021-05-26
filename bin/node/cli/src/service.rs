@@ -156,6 +156,7 @@ pub fn new_partial(
 		let shared_epoch_changes = babe_link.epoch_changes().clone();
 
 		let client = client.clone();
+		let backend = backend.clone();
 		let pool = transaction_pool.clone();
 		let select_chain = select_chain.clone();
 		let keystore = keystore_container.sync_keystore();
@@ -182,7 +183,9 @@ pub fn new_partial(
 				},
 			};
 
-			node_rpc::create_full(deps)
+			let mut io = node_rpc::create_full(deps);
+			rpc_ext::extend_rpc(&mut io, client.clone(), backend.clone());
+			io
 		};
 
 		(rpc_extensions_builder, rpc_setup)
