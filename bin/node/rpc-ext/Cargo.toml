@@ -11,6 +11,7 @@ derive_more = "0.99.0"
 jsonrpc-derive = "15.1"
 jsonrpc-core = "15.1"
 jsonrpc-core-client = "15.1"
+impl-serde = "0.3"
 
 # primitives
 sp-runtime = { version = "3.0.0", path = "../../../primitives/runtime" }

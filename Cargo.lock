@@ -4119,6 +4119,7 @@ dependencies = [
  "platforms",
  "rand 0.7.3",
  "regex",
+ "rpc-ext",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-chain-spec",
@@ -6728,6 +6729,23 @@ checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
 dependencies = [
  "libc",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "rpc-ext"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "impl-serde",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "node-rpc",
+ "sc-client-api",
+ "serde",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]
