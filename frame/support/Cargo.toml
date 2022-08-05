@@ -30,7 +30,7 @@ once_cell = { version = "1", default-features = false, optional = true }
 sp-state-machine = { version = "0.10.0-dev", optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.2"
 impl-trait-for-tuples = "0.2.1"
-smallvec = "1.4.1"
+smallvec = "1.9.0"
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
