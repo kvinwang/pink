@@ -21,5 +21,5 @@ sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
 sp-core = { version = "4.0.0-dev", path = "../../core" }
 sp-io = { version = "4.0.0-dev", path = "../../io" }
-tracing = "0.1.25"
+tracing = "0.1.34"
 tracing-core = "0.1.17"
