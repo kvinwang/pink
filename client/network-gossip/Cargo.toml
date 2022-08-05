@@ -24,7 +24,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 wasm-timer = "0.2"
-tracing = "0.1.25"
+tracing = "0.1.34"
 
 [dev-dependencies]
 async-std = "1.6.5"
